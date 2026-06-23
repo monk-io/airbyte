@@ -1,0 +1,516 @@
+namespace: airbyte
+
+stack-db:
+  defines: runnable
+  inherits: airbyte/example-db
+  metadata:
+    name: Airbyte Stack PostgreSQL
+    description: Private PostgreSQL database for the standalone Airbyte stack.
+    tags: airbyte, postgres, database, standalone, production
+    website: https://www.postgresql.org/
+    source: https://github.com/postgres/postgres
+    publisher: monk.io
+    icon: https://www.postgresql.org/media/img/about/press/elephant.png
+    private: false
+  variables:
+    db_name:
+      type: string
+      env: POSTGRES_DB
+      value: <- $stack-db-name
+      description: PostgreSQL database name created for the standalone stack.
+    db_user:
+      type: string
+      env: POSTGRES_USER
+      value: <- $stack-db-user
+      description: PostgreSQL user created for the standalone stack.
+    db_pass:
+      type: string
+      env: POSTGRES_PASSWORD
+      value: <- $stack-db-password
+      description: Sensitive generated PostgreSQL password for the standalone stack. Inheriting production deployments should set secret("airbyte-db-password").
+  containers:
+    postgres:
+      paths:
+        - <- `${monk-volume-path}/airbyte-stack-postgres:/var/lib/postgresql/data`
+  checks:
+    readiness:
+      code: tcp-check-service("airbyte/stack-db", "postgres")
+      period: 10
+      initialDelay: 10
+      attempts: 30
+
+stack-minio:
+  defines: runnable
+  inherits: airbyte/example-minio
+  metadata:
+    name: Airbyte Stack MinIO
+    description: Private S3-compatible object store for the standalone Airbyte stack.
+    tags: airbyte, minio, object-storage, standalone, production
+    website: https://min.io/
+    source: https://github.com/minio/minio
+    publisher: monk.io
+    icon: https://min.io/resources/img/logo.svg
+    private: false
+  variables:
+    admin-username:
+      type: string
+      env: MINIO_ROOT_USER
+      value: <- $stack-s3-access-key
+      description: Sensitive generated MinIO root access key for the standalone stack.
+    admin-password:
+      type: string
+      env: MINIO_ROOT_PASSWORD
+      value: <- $stack-s3-secret-key
+      description: Sensitive generated MinIO root secret key for the standalone stack. Inheriting production deployments should set secret("airbyte-s3-secret-key").
+  containers:
+    minio:
+      paths:
+        - <- `${monk-volume-path}/airbyte-stack-minio:/data`
+  checks:
+    readiness:
+      code: tcp-check-service("airbyte/stack-minio", "api")
+      period: 10
+      initialDelay: 10
+      attempts: 30
+
+stack-init:
+  defines: runnable
+  inherits: airbyte/example-init
+  metadata:
+    name: Airbyte Stack Init
+    description: Creates Airbyte local workspace directories for the standalone stack.
+    tags: airbyte, init, standalone, production
+    website: https://airbyte.com/
+    source: https://github.com/airbytehq/airbyte
+    publisher: monk.io
+    icon: https://assets-global.website-files.com/6064b31ff49a2d31e0493af1/62fe7dbb7344b272e290f1c7_airbytelogo.png
+    private: false
+  variables:
+    volume-local:
+      type: string
+      value: <- `${monk-volume-path}/airbyte-stack`
+      description: Monk volume subdirectory used by the standalone stack.
+
+stack-temporal:
+  defines: runnable
+  inherits: airbyte/example-temporal
+  metadata:
+    name: Airbyte Stack Temporal
+    description: Temporal service wired to the standalone stack PostgreSQL database.
+    tags: airbyte, temporal, standalone, production
+    website: https://airbyte.com/
+    source: https://github.com/airbytehq/airbyte
+    publisher: monk.io
+    icon: https://assets-global.website-files.com/6064b31ff49a2d31e0493af1/62fe7dbb7344b272e290f1c7_airbytelogo.png
+    private: false
+  variables:
+    database-name:
+      type: string
+      value: <- $stack-db-name
+      description: PostgreSQL database name used by Airbyte Temporal.
+    database-user:
+      type: string
+      env: DATABASE_USER
+      value: <- $stack-db-user
+      description: PostgreSQL user used by Airbyte Temporal.
+    database-password:
+      type: string
+      env: DATABASE_PASSWORD
+      value: <- $stack-db-password
+      description: Sensitive generated PostgreSQL password used by Airbyte Temporal.
+  connections:
+    db:
+      target: airbyte/stack-db
+      service: postgres
+      description: Private PostgreSQL service connection.
+  depends:
+    wait-for:
+      runnables:
+        - airbyte/stack-db
+      timeout: 180
+  checks:
+    readiness:
+      code: tcp-check-service("airbyte/stack-temporal", "temporal")
+      period: 15
+      initialDelay: 45
+      attempts: 40
+
+stack-bootloader:
+  defines: runnable
+  inherits: airbyte/example-bootloader
+  metadata:
+    name: Airbyte Stack Bootloader
+    description: Runs Airbyte migrations for the standalone stack.
+    tags: airbyte, bootloader, standalone, production
+    website: https://airbyte.com/
+    source: https://github.com/airbytehq/airbyte
+    publisher: monk.io
+    icon: https://assets-global.website-files.com/6064b31ff49a2d31e0493af1/62fe7dbb7344b272e290f1c7_airbytelogo.png
+    private: false
+  variables:
+    database-name:
+      type: string
+      value: <- $stack-db-name
+      description: PostgreSQL database name used by Airbyte bootloader.
+    database-user:
+      type: string
+      env: DATABASE_USER
+      value: <- $stack-db-user
+      description: PostgreSQL user used by Airbyte bootloader.
+    database-password:
+      type: string
+      env: DATABASE_PASSWORD
+      value: <- $stack-db-password
+      description: Sensitive generated PostgreSQL password used by Airbyte bootloader.
+  connections:
+    db:
+      target: airbyte/stack-db
+      service: postgres
+      description: Private PostgreSQL service connection.
+  depends:
+    wait-for:
+      runnables:
+        - airbyte/stack-db
+      timeout: 180
+
+stack-server:
+  defines: runnable
+  inherits: airbyte/example-server
+  metadata:
+    name: Airbyte Stack Server
+    description: Airbyte API server for the standalone stack.
+    tags: airbyte, api, standalone, production
+    website: https://airbyte.com/
+    source: https://github.com/airbytehq/airbyte
+    publisher: monk.io
+    icon: https://assets-global.website-files.com/6064b31ff49a2d31e0493af1/62fe7dbb7344b272e290f1c7_airbytelogo.png
+    private: false
+  variables:
+    volume-local:
+      type: string
+      value: <- `${monk-volume-path}/airbyte-stack`
+      description: Monk volume subdirectory used by the standalone stack.
+    database-name:
+      type: string
+      value: <- $stack-db-name
+      description: PostgreSQL database name used by Airbyte server.
+    database-user:
+      type: string
+      env: DATABASE_USER
+      value: <- $stack-db-user
+      description: PostgreSQL user used by Airbyte server.
+    database-password:
+      type: string
+      env: DATABASE_PASSWORD
+      value: <- $stack-db-password
+      description: Sensitive generated PostgreSQL password used by Airbyte server.
+    storage-access-key-id:
+      type: string
+      env: S3_ACCESS_KEY_ID
+      value: <- $stack-s3-access-key
+      description: Sensitive generated S3 access key for the standalone stack.
+    storage-secret-access-key:
+      type: string
+      env: S3_SECRET_ACCESS_KEY
+      value: <- $stack-s3-secret-key
+      description: Sensitive generated S3 secret key for the standalone stack.
+  connections:
+    db:
+      target: airbyte/stack-db
+      service: postgres
+      description: Private PostgreSQL service connection.
+    temporal:
+      target: airbyte/stack-temporal
+      service: temporal
+      description: Private Temporal service connection.
+    object-storage:
+      target: airbyte/stack-minio
+      service: api
+      description: Private S3-compatible object storage connection.
+  depends:
+    wait-for:
+      runnables:
+        - airbyte/stack-temporal
+        - airbyte/stack-minio
+        - airbyte/stack-db
+      timeout: 300
+
+stack-worker:
+  defines: runnable
+  inherits: airbyte/example-worker
+  metadata:
+    name: Airbyte Stack Worker
+    description: Airbyte worker connected to the standalone stack runtime.
+    tags: airbyte, worker, standalone, production
+    website: https://airbyte.com/
+    source: https://github.com/airbytehq/airbyte
+    publisher: monk.io
+    icon: https://assets-global.website-files.com/6064b31ff49a2d31e0493af1/62fe7dbb7344b272e290f1c7_airbytelogo.png
+    private: false
+  variables:
+    volume-local:
+      type: string
+      value: <- `${monk-volume-path}/airbyte-stack`
+      description: Monk volume subdirectory used by the standalone stack.
+    database-name:
+      type: string
+      value: <- $stack-db-name
+      description: PostgreSQL database name used by Airbyte worker.
+    database-user:
+      type: string
+      env: DATABASE_USER
+      value: <- $stack-db-user
+      description: PostgreSQL user used by Airbyte worker.
+    database-password:
+      type: string
+      env: DATABASE_PASSWORD
+      value: <- $stack-db-password
+      description: Sensitive generated PostgreSQL password used by Airbyte worker.
+    storage-access-key-id:
+      type: string
+      env: S3_ACCESS_KEY_ID
+      value: <- $stack-s3-access-key
+      description: Sensitive generated S3 access key for the standalone stack.
+    storage-secret-access-key:
+      type: string
+      env: S3_SECRET_ACCESS_KEY
+      value: <- $stack-s3-secret-key
+      description: Sensitive generated S3 secret key for the standalone stack.
+  connections:
+    db:
+      target: airbyte/stack-db
+      service: postgres
+      description: Private PostgreSQL service connection.
+    temporal:
+      target: airbyte/stack-temporal
+      service: temporal
+      description: Private Temporal service connection.
+    api:
+      target: airbyte/stack-server
+      service: api
+      description: Private Airbyte API service connection.
+    object-storage:
+      target: airbyte/stack-minio
+      service: api
+      description: Private S3-compatible object storage connection.
+  depends:
+    wait-for:
+      runnables:
+        - airbyte/stack-server
+      timeout: 300
+
+stack-cron:
+  defines: runnable
+  inherits: airbyte/example-cron
+  metadata:
+    name: Airbyte Stack Cron
+    description: Airbyte cron service connected to the standalone stack runtime.
+    tags: airbyte, cron, standalone, production
+    website: https://airbyte.com/
+    source: https://github.com/airbytehq/airbyte
+    publisher: monk.io
+    icon: https://assets-global.website-files.com/6064b31ff49a2d31e0493af1/62fe7dbb7344b272e290f1c7_airbytelogo.png
+    private: false
+  variables:
+    volume-local:
+      type: string
+      value: <- `${monk-volume-path}/airbyte-stack`
+      description: Monk volume subdirectory used by the standalone stack.
+    database-name:
+      type: string
+      value: <- $stack-db-name
+      description: PostgreSQL database name used by Airbyte cron.
+    database-user:
+      type: string
+      env: DATABASE_USER
+      value: <- $stack-db-user
+      description: PostgreSQL user used by Airbyte cron.
+    database-password:
+      type: string
+      env: DATABASE_PASSWORD
+      value: <- $stack-db-password
+      description: Sensitive generated PostgreSQL password used by Airbyte cron.
+  connections:
+    db:
+      target: airbyte/stack-db
+      service: postgres
+      description: Private PostgreSQL service connection.
+    temporal:
+      target: airbyte/stack-temporal
+      service: temporal
+      description: Private Temporal service connection.
+    api:
+      target: airbyte/stack-server
+      service: api
+      description: Private Airbyte API service connection.
+  depends:
+    wait-for:
+      runnables:
+        - airbyte/stack-worker
+      timeout: 300
+
+stack-webapp:
+  defines: runnable
+  inherits: airbyte/example-webapp
+  metadata:
+    name: Airbyte Stack Webapp
+    description: Private Airbyte web UI for the standalone production-oriented stack.
+    tags: airbyte, webapp, standalone, production
+    website: https://airbyte.com/
+    source: https://github.com/airbytehq/airbyte
+    publisher: monk.io
+    icon: https://assets-global.website-files.com/6064b31ff49a2d31e0493af1/62fe7dbb7344b272e290f1c7_airbytelogo.png
+    private: false
+  variables:
+    webapp-url:
+      type: string
+      env: WEBAPP_URL
+      value: http://localhost:8000/
+      description: External URL to use for Airbyte links. Production deployments should override this with the protected route.
+  services:
+    http:
+      container: webapp
+      port: 80
+      protocol: tcp
+      publish: false
+      description: Private Airbyte web UI service. Expose only behind an authenticated reverse proxy or ingress.
+  connections:
+    api:
+      target: airbyte/stack-server
+      service: api
+      description: Private Airbyte API service connection.
+  depends:
+    wait-for:
+      runnables:
+        - airbyte/stack-server
+      timeout: 300
+  checks:
+    readiness:
+      code: http-get-service("airbyte/stack-webapp", "http", "/") get-member("status") 200
+      period: 15
+      initialDelay: 60
+      attempts: 40
+
+stack:
+  defines: process-group
+  metadata:
+    name: Airbyte Standalone Stack
+    description: |
+      Secure production-oriented standalone Airbyte stack with private PostgreSQL
+      and MinIO backing services. No service is published directly; expose the
+      web UI only through a protected ingress or authenticated reverse proxy.
+    tags: airbyte, elt, postgres, minio, standalone, production
+    website: https://airbyte.com/
+    source: https://github.com/airbytehq/airbyte
+    publisher: monk.io
+    icon: https://assets-global.website-files.com/6064b31ff49a2d31e0493af1/62fe7dbb7344b272e290f1c7_airbytelogo.png
+    private: false
+  variables:
+    stack-db-name:
+      type: string
+      value: airbyte
+      description: PostgreSQL database name created for the standalone stack.
+    stack-db-user:
+      type: string
+      value: airbyte
+      description: PostgreSQL user created for the standalone stack.
+    stack-db-password:
+      type: string
+      value: <- random-uuid
+      description: Sensitive generated PostgreSQL password. Inheriting production deployments should set secret("airbyte-db-password").
+    stack-s3-access-key:
+      type: string
+      value: airbyte
+      description: Sensitive generated MinIO access key for the standalone stack.
+    stack-s3-secret-key:
+      type: string
+      value: <- random-uuid
+      description: Sensitive generated MinIO secret key. Inheriting production deployments should set secret("airbyte-s3-secret-key").
+  runnable-list:
+    - airbyte/stack-db
+    - airbyte/stack-minio
+    - airbyte/stack-temporal
+    - airbyte/stack-server
+    - airbyte/stack-worker
+    - airbyte/stack-cron
+    - airbyte/stack-webapp
+
+stack-local-webapp:
+  defines: runnable
+  inherits: airbyte/stack-webapp
+  metadata:
+    name: Airbyte Local Stack Webapp
+    description: Published local Airbyte web UI for standalone stack verification.
+    tags: airbyte, webapp, standalone, local
+    website: https://airbyte.com/
+    source: https://github.com/airbytehq/airbyte
+    publisher: monk.io
+    icon: https://assets-global.website-files.com/6064b31ff49a2d31e0493af1/62fe7dbb7344b272e290f1c7_airbytelogo.png
+    private: false
+  variables:
+    webapp-url:
+      type: string
+      env: WEBAPP_URL
+      value: http://localhost:18001/
+      description: Local URL for the standalone local verification flavor.
+    host-port:
+      type: int
+      value: 18001
+      description: Non-privileged host port published for local standalone verification.
+  services:
+    http:
+      container: webapp
+      port: 80
+      protocol: tcp
+      publish: true
+      host-port: <- $host-port
+      description: Published local Airbyte web UI endpoint for external smoke testing.
+  checks:
+    readiness:
+      code: http-get-service("airbyte/stack-local-webapp", "http", "/") get-member("status") 200
+      period: 15
+      initialDelay: 60
+      attempts: 40
+
+stack-local:
+  defines: process-group
+  metadata:
+    name: Airbyte Standalone Local Stack
+    description: |
+      Local verification flavor of the standalone Airbyte stack. It keeps
+      PostgreSQL and MinIO private and publishes only the web UI on localhost.
+    tags: airbyte, elt, postgres, minio, standalone, local
+    website: https://airbyte.com/
+    source: https://github.com/airbytehq/airbyte
+    publisher: monk.io
+    icon: https://assets-global.website-files.com/6064b31ff49a2d31e0493af1/62fe7dbb7344b272e290f1c7_airbytelogo.png
+    private: false
+  variables:
+    stack-db-name:
+      type: string
+      value: airbyte
+      description: PostgreSQL database name created for the local stack flavor.
+    stack-db-user:
+      type: string
+      value: airbyte
+      description: PostgreSQL user created for the local stack flavor.
+    stack-db-password:
+      type: string
+      value: <- random-uuid
+      description: Sensitive generated PostgreSQL password for the local stack flavor.
+    stack-s3-access-key:
+      type: string
+      value: airbyte
+      description: Sensitive generated MinIO access key for the local stack flavor.
+    stack-s3-secret-key:
+      type: string
+      value: <- random-uuid
+      description: Sensitive generated MinIO secret key for the local stack flavor.
+  runnable-list:
+    - airbyte/stack-db
+    - airbyte/stack-minio
+    - airbyte/stack-temporal
+    - airbyte/stack-server
+    - airbyte/stack-worker
+    - airbyte/stack-cron
+    - airbyte/stack-local-webapp
