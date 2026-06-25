@@ -1,0 +1,559 @@
+namespace: airbyte
+
+example-db:
+  defines: runnable
+  inherits: postgresql/db
+  metadata:
+    name: Airbyte Example PostgreSQL
+    description: Private PostgreSQL database used by the Airbyte component example.
+    tags: airbyte, postgres, database, example, local
+    website: https://www.postgresql.org/
+    source: https://github.com/postgres/postgres
+    publisher: monk.io
+    icon: https://www.postgresql.org/media/img/about/press/elephant.png
+    private: false
+  variables:
+    version:
+      type: string
+      value: "17"
+      description: Public PostgreSQL Docker image tag used by the component example.
+    db_name:
+      type: string
+      env: POSTGRES_DB
+      value: <- $example-db-name
+      description: PostgreSQL database name created for Airbyte.
+    db_user:
+      type: string
+      env: POSTGRES_USER
+      value: <- $example-db-user
+      description: PostgreSQL user created for Airbyte.
+    db_pass:
+      type: string
+      env: POSTGRES_PASSWORD
+      value: <- $example-db-password
+      description: Sensitive generated PostgreSQL password for the component example.
+  containers:
+    postgres:
+      paths:
+        - <- `${monk-volume-path}/airbyte-example-postgres:/var/lib/postgresql/data`
+  services:
+    postgres:
+      container: postgres
+      port: 5432
+      protocol: tcp
+      publish: false
+      description: Private PostgreSQL endpoint consumed by Airbyte.
+  checks:
+    readiness:
+      code: tcp-check-service("airbyte/example-db", "postgres")
+      period: 10
+      initialDelay: 10
+      attempts: 30
+
+example-minio:
+  defines: runnable
+  inherits: minio/minio-server
+  metadata:
+    name: Airbyte Example MinIO
+    description: Private S3-compatible object store used by the Airbyte component example.
+    tags: airbyte, minio, object-storage, example, local
+    website: https://min.io/
+    source: https://github.com/minio/minio
+    publisher: monk.io
+    icon: https://min.io/resources/img/logo.svg
+    private: false
+  variables:
+    admin-username:
+      type: string
+      env: MINIO_ROOT_USER
+      value: <- $example-s3-access-key
+      description: Sensitive generated MinIO root access key for the component example.
+    admin-password:
+      type: string
+      env: MINIO_ROOT_PASSWORD
+      value: <- $example-s3-secret-key
+      description: Sensitive generated MinIO root secret key for the component example.
+    api-port:
+      type: int
+      value: 9000
+      description: MinIO S3 API port.
+    console-port:
+      type: int
+      env: MINIO_CONSOLE_PORT
+      value: 9001
+      description: MinIO console port, kept private in the component example.
+  containers:
+    minio:
+      paths:
+        - <- `${monk-volume-path}/airbyte-example-minio:/data`
+  services:
+    api:
+      container: minio
+      port: <- $api-port
+      protocol: tcp
+      publish: false
+      description: Private S3-compatible API endpoint consumed by Airbyte.
+    console:
+      container: minio
+      port: <- $console-port
+      protocol: tcp
+      publish: false
+      description: Private MinIO console service for local inspection when explicitly exposed by inheriting templates.
+  checks:
+    readiness:
+      code: tcp-check-service("airbyte/example-minio", "api")
+      period: 10
+      initialDelay: 10
+      attempts: 30
+
+example-init:
+  defines: runnable
+  inherits: airbyte/init
+  metadata:
+    name: Airbyte Example Init
+    description: Creates Airbyte local workspace directories for the component example.
+    tags: airbyte, init, example, local
+    website: https://airbyte.com/
+    source: https://github.com/airbytehq/airbyte
+    publisher: monk.io
+    icon: https://assets-global.website-files.com/6064b31ff49a2d31e0493af1/62fe7dbb7344b272e290f1c7_airbytelogo.png
+    private: false
+  variables:
+    volume-local:
+      type: string
+      value: <- `${monk-volume-path}/airbyte-example`
+      description: Monk volume subdirectory used by the Airbyte component example.
+
+example-temporal:
+  defines: runnable
+  inherits: airbyte/temporal
+  metadata:
+    name: Airbyte Example Temporal
+    description: Temporal service wired to the component example PostgreSQL database.
+    tags: airbyte, temporal, example, local
+    website: https://airbyte.com/
+    source: https://github.com/airbytehq/airbyte
+    publisher: monk.io
+    icon: https://assets-global.website-files.com/6064b31ff49a2d31e0493af1/62fe7dbb7344b272e290f1c7_airbytelogo.png
+    private: false
+  variables:
+    database-host:
+      type: string
+      value: <- connection-hostname("db")
+      description: PostgreSQL hostname from the component example db connection.
+    database-port:
+      type: int
+      value: <- connection-port("db")
+      description: PostgreSQL port from the component example db connection.
+    database-name:
+      type: string
+      value: <- $example-db-name
+      description: PostgreSQL database name used by Airbyte Temporal.
+    database-user:
+      type: string
+      env: DATABASE_USER
+      value: <- $example-db-user
+      description: PostgreSQL user used by Airbyte Temporal.
+    database-password:
+      type: string
+      env: DATABASE_PASSWORD
+      value: <- $example-db-password
+      description: Sensitive generated PostgreSQL password used by Airbyte Temporal.
+  connections:
+    db:
+      target: airbyte/example-db
+      service: postgres
+      description: Private PostgreSQL service connection.
+  depends:
+    wait-for:
+      runnables:
+        - airbyte/example-db
+      timeout: 180
+  checks:
+    readiness:
+      code: tcp-check-service("airbyte/example-temporal", "temporal")
+      period: 15
+      initialDelay: 45
+      attempts: 40
+
+example-bootloader:
+  defines: runnable
+  inherits: airbyte/bootloader
+  metadata:
+    name: Airbyte Example Bootloader
+    description: Runs Airbyte migrations for the component example.
+    tags: airbyte, bootloader, example, local
+    website: https://airbyte.com/
+    source: https://github.com/airbytehq/airbyte
+    publisher: monk.io
+    icon: https://assets-global.website-files.com/6064b31ff49a2d31e0493af1/62fe7dbb7344b272e290f1c7_airbytelogo.png
+    private: false
+  variables:
+    database-host:
+      type: string
+      value: <- connection-hostname("db")
+      description: PostgreSQL hostname from the component example db connection.
+    database-port:
+      type: int
+      value: <- connection-port("db")
+      description: PostgreSQL port from the component example db connection.
+    database-name:
+      type: string
+      value: <- $example-db-name
+      description: PostgreSQL database name used by Airbyte bootloader.
+    database-user:
+      type: string
+      env: DATABASE_USER
+      value: <- $example-db-user
+      description: PostgreSQL user used by Airbyte bootloader.
+    database-password:
+      type: string
+      env: DATABASE_PASSWORD
+      value: <- $example-db-password
+      description: Sensitive generated PostgreSQL password used by Airbyte bootloader.
+  connections:
+    db:
+      target: airbyte/example-db
+      service: postgres
+      description: Private PostgreSQL service connection.
+  depends:
+    wait-for:
+      runnables:
+        - airbyte/example-db
+      timeout: 180
+
+example-server:
+  defines: runnable
+  inherits: airbyte/server
+  metadata:
+    name: Airbyte Example Server
+    description: Airbyte API server for the component example.
+    tags: airbyte, api, example, local
+    website: https://airbyte.com/
+    source: https://github.com/airbytehq/airbyte
+    publisher: monk.io
+    icon: https://assets-global.website-files.com/6064b31ff49a2d31e0493af1/62fe7dbb7344b272e290f1c7_airbytelogo.png
+    private: false
+  variables:
+    volume-local:
+      type: string
+      value: <- `${monk-volume-path}/airbyte-example`
+      description: Monk volume subdirectory used by the Airbyte component example.
+    database-host:
+      type: string
+      value: <- connection-hostname("db")
+      description: PostgreSQL hostname from the component example db connection.
+    database-port:
+      type: int
+      value: <- connection-port("db")
+      description: PostgreSQL port from the component example db connection.
+    database-name:
+      type: string
+      value: <- $example-db-name
+      description: PostgreSQL database name used by Airbyte server.
+    database-user:
+      type: string
+      env: DATABASE_USER
+      value: <- $example-db-user
+      description: PostgreSQL user used by Airbyte server.
+    database-password:
+      type: string
+      env: DATABASE_PASSWORD
+      value: <- $example-db-password
+      description: Sensitive generated PostgreSQL password used by Airbyte server.
+    temporal-host:
+      type: string
+      env: TEMPORAL_HOST
+      value: <- connection-hostname("temporal") set-tmp("host") connection-port("temporal") set-tmp("port") `${host}:${port}`
+      description: Temporal host and port from the component example temporal connection.
+    internal-api-host:
+      type: string
+      env: INTERNAL_API_HOST
+      value: localhost:8001
+      description: Internal API host used by the server itself.
+    storage-endpoint:
+      type: string
+      env: S3_ENDPOINT
+      value: <- connection-hostname("object-storage") set-tmp("host") connection-port("object-storage") set-tmp("port") `http://${host}:${port}`
+      description: MinIO S3 endpoint from the component example object-storage connection.
+    storage-access-key-id:
+      type: string
+      env: S3_ACCESS_KEY_ID
+      value: <- $example-s3-access-key
+      description: Sensitive generated S3 access key for the component example.
+    storage-secret-access-key:
+      type: string
+      env: S3_SECRET_ACCESS_KEY
+      value: <- $example-s3-secret-key
+      description: Sensitive generated S3 secret key for the component example.
+  connections:
+    db:
+      target: airbyte/example-db
+      service: postgres
+      description: Private PostgreSQL service connection.
+    temporal:
+      target: airbyte/example-temporal
+      service: temporal
+      description: Private Temporal service connection.
+    object-storage:
+      target: airbyte/example-minio
+      service: api
+      description: Private S3-compatible object storage connection.
+  depends:
+    wait-for:
+      runnables:
+        - airbyte/example-temporal
+        - airbyte/example-minio
+        - airbyte/example-db
+      timeout: 300
+
+example-worker:
+  defines: runnable
+  inherits: airbyte/worker
+  metadata:
+    name: Airbyte Example Worker
+    description: Airbyte worker connected to component example API, Temporal, PostgreSQL, and MinIO.
+    tags: airbyte, worker, example, local
+    website: https://airbyte.com/
+    source: https://github.com/airbytehq/airbyte
+    publisher: monk.io
+    icon: https://assets-global.website-files.com/6064b31ff49a2d31e0493af1/62fe7dbb7344b272e290f1c7_airbytelogo.png
+    private: false
+  variables:
+    volume-local:
+      type: string
+      value: <- `${monk-volume-path}/airbyte-example`
+      description: Monk volume subdirectory used by the Airbyte component example.
+    database-host:
+      type: string
+      value: <- connection-hostname("db")
+      description: PostgreSQL hostname from the component example db connection.
+    database-port:
+      type: int
+      value: <- connection-port("db")
+      description: PostgreSQL port from the component example db connection.
+    database-name:
+      type: string
+      value: <- $example-db-name
+      description: PostgreSQL database name used by Airbyte worker.
+    database-user:
+      type: string
+      env: DATABASE_USER
+      value: <- $example-db-user
+      description: PostgreSQL user used by Airbyte worker.
+    database-password:
+      type: string
+      env: DATABASE_PASSWORD
+      value: <- $example-db-password
+      description: Sensitive generated PostgreSQL password used by Airbyte worker.
+    temporal-host:
+      type: string
+      env: TEMPORAL_HOST
+      value: <- connection-hostname("temporal") set-tmp("host") connection-port("temporal") set-tmp("port") `${host}:${port}`
+      description: Temporal host and port from the component example temporal connection.
+    internal-api-host:
+      type: string
+      env: INTERNAL_API_HOST
+      value: <- connection-hostname("api") set-tmp("host") connection-port("api") set-tmp("port") `${host}:${port}`
+      description: Airbyte internal API host and port from the component example server connection.
+    storage-endpoint:
+      type: string
+      env: S3_ENDPOINT
+      value: <- connection-hostname("object-storage") set-tmp("host") connection-port("object-storage") set-tmp("port") `http://${host}:${port}`
+      description: MinIO S3 endpoint from the component example object-storage connection.
+    storage-access-key-id:
+      type: string
+      env: S3_ACCESS_KEY_ID
+      value: <- $example-s3-access-key
+      description: Sensitive generated S3 access key for the component example.
+    storage-secret-access-key:
+      type: string
+      env: S3_SECRET_ACCESS_KEY
+      value: <- $example-s3-secret-key
+      description: Sensitive generated S3 secret key for the component example.
+  connections:
+    db:
+      target: airbyte/example-db
+      service: postgres
+      description: Private PostgreSQL service connection.
+    temporal:
+      target: airbyte/example-temporal
+      service: temporal
+      description: Private Temporal service connection.
+    api:
+      target: airbyte/example-server
+      service: api
+      description: Private Airbyte API service connection.
+    object-storage:
+      target: airbyte/example-minio
+      service: api
+      description: Private S3-compatible object storage connection.
+  depends:
+    wait-for:
+      runnables:
+        - airbyte/example-server
+      timeout: 300
+
+example-cron:
+  defines: runnable
+  inherits: airbyte/cron
+  metadata:
+    name: Airbyte Example Cron
+    description: Airbyte cron service connected to the component example runtime.
+    tags: airbyte, cron, example, local
+    website: https://airbyte.com/
+    source: https://github.com/airbytehq/airbyte
+    publisher: monk.io
+    icon: https://assets-global.website-files.com/6064b31ff49a2d31e0493af1/62fe7dbb7344b272e290f1c7_airbytelogo.png
+    private: false
+  variables:
+    volume-local:
+      type: string
+      value: <- `${monk-volume-path}/airbyte-example`
+      description: Monk volume subdirectory used by the Airbyte component example.
+    database-host:
+      type: string
+      value: <- connection-hostname("db")
+      description: PostgreSQL hostname from the component example db connection.
+    database-port:
+      type: int
+      value: <- connection-port("db")
+      description: PostgreSQL port from the component example db connection.
+    database-name:
+      type: string
+      value: <- $example-db-name
+      description: PostgreSQL database name used by Airbyte cron.
+    database-user:
+      type: string
+      env: DATABASE_USER
+      value: <- $example-db-user
+      description: PostgreSQL user used by Airbyte cron.
+    database-password:
+      type: string
+      env: DATABASE_PASSWORD
+      value: <- $example-db-password
+      description: Sensitive generated PostgreSQL password used by Airbyte cron.
+    temporal-host:
+      type: string
+      env: TEMPORAL_HOST
+      value: <- connection-hostname("temporal") set-tmp("host") connection-port("temporal") set-tmp("port") `${host}:${port}`
+      description: Temporal host and port from the component example temporal connection.
+    internal-api-host:
+      type: string
+      env: INTERNAL_API_HOST
+      value: <- connection-hostname("api") set-tmp("host") connection-port("api") set-tmp("port") `${host}:${port}`
+      description: Airbyte internal API host and port from the component example server connection.
+  connections:
+    db:
+      target: airbyte/example-db
+      service: postgres
+      description: Private PostgreSQL service connection.
+    temporal:
+      target: airbyte/example-temporal
+      service: temporal
+      description: Private Temporal service connection.
+    api:
+      target: airbyte/example-server
+      service: api
+      description: Private Airbyte API service connection.
+  depends:
+    wait-for:
+      runnables:
+        - airbyte/example-worker
+      timeout: 300
+
+example-webapp:
+  defines: runnable
+  inherits: airbyte/webapp
+  metadata:
+    name: Airbyte Example Webapp
+    description: Published local Airbyte web UI for the component example.
+    tags: airbyte, webapp, example, local
+    website: https://airbyte.com/
+    source: https://github.com/airbytehq/airbyte
+    publisher: monk.io
+    icon: https://assets-global.website-files.com/6064b31ff49a2d31e0493af1/62fe7dbb7344b272e290f1c7_airbytelogo.png
+    private: false
+  variables:
+    webapp-url:
+      type: string
+      env: WEBAPP_URL
+      value: http://localhost:18000/
+      description: Local URL for the component example web UI.
+    internal-api-host:
+      type: string
+      env: INTERNAL_API_HOST
+      value: <- connection-hostname("api") set-tmp("host") connection-port("api") set-tmp("port") `${host}:${port}`
+      description: Airbyte internal API host and port from the component example server connection.
+    host-port:
+      type: int
+      value: 18000
+      description: Non-privileged host port published for local component example verification.
+  services:
+    http:
+      container: webapp
+      port: 80
+      protocol: tcp
+      publish: true
+      host-port: <- $host-port
+      description: Published local Airbyte web UI endpoint for external smoke testing.
+  connections:
+    api:
+      target: airbyte/example-server
+      service: api
+      description: Private Airbyte API service connection.
+  depends:
+    wait-for:
+      runnables:
+        - airbyte/example-server
+      timeout: 300
+  checks:
+    readiness:
+      code: http-get-service("airbyte/example-webapp", "http", "/") get-member("status") 200
+      period: 15
+      initialDelay: 60
+      attempts: 40
+
+example:
+  defines: process-group
+  metadata:
+    name: Airbyte Component Example
+    description: |
+      Component demonstration that inherits the reusable Airbyte runnables and
+      wires concrete catalog PostgreSQL and MinIO backing services. The web UI is
+      published on localhost for verification only.
+    tags: airbyte, elt, postgres, minio, component, example, local
+    website: https://airbyte.com/
+    source: https://github.com/airbytehq/airbyte
+    publisher: monk.io
+    icon: https://assets-global.website-files.com/6064b31ff49a2d31e0493af1/62fe7dbb7344b272e290f1c7_airbytelogo.png
+    private: false
+  variables:
+    example-db-name:
+      type: string
+      value: airbyte
+      description: PostgreSQL database name created for the component example.
+    example-db-user:
+      type: string
+      value: airbyte
+      description: PostgreSQL user created for the component example.
+    example-db-password:
+      type: string
+      value: <- random-uuid
+      description: Sensitive generated PostgreSQL password for the component example.
+    example-s3-access-key:
+      type: string
+      value: airbyte
+      description: Sensitive generated MinIO access key for the component example.
+    example-s3-secret-key:
+      type: string
+      value: <- random-uuid
+      description: Sensitive generated MinIO secret key for the component example.
+  runnable-list:
+    - airbyte/example-db
+    - airbyte/example-minio
+    - airbyte/example-temporal
+    - airbyte/example-server
+    - airbyte/example-worker
+    - airbyte/example-cron
+    - airbyte/example-webapp

@@ -1,0 +1,456 @@
+namespace: airbyte
+
+common:
+  metadata:
+    defines: metadata
+    name: Airbyte
+    description: |
+      Airbyte open-source data movement platform packaged as reusable Monk
+      runnables. The base runnables expect external PostgreSQL and S3-compatible
+      object storage connections; compatible Monk packages include
+      postgresql/db, hosted Neon PostgreSQL packages, and minio/minio-server.
+    tags: airbyte, elt, data-integration, component
+    website: https://airbyte.com/
+    source: https://github.com/airbytehq/airbyte
+    publisher: monk.io
+    icon: https://assets-global.website-files.com/6064b31ff49a2d31e0493af1/62fe7dbb7344b272e290f1c7_airbytelogo.png
+    private: false
+  variables:
+    airbyte-image-tag:
+      type: string
+      value: 0.40.18
+      description: Public Airbyte Docker image tag used by the direct-container runtime.
+    volume-local:
+      type: string
+      value: <- `${monk-volume-path}/airbyte`
+      description: Monk volume subdirectory used for Airbyte local workspace and config data.
+    airbyte-version:
+      type: string
+      env: AIRBYTE_VERSION
+      value: <- $airbyte-image-tag
+      description: Airbyte application version exposed to the runtime.
+    database-host:
+      type: string
+      value: ""
+      description: PostgreSQL hostname. Inheriting templates must set this from connection-hostname("db").
+    database-port:
+      type: int
+      value: 5432
+      description: PostgreSQL TCP port. Inheriting templates should set this from connection-port("db").
+    database-name:
+      type: string
+      value: airbyte
+      description: PostgreSQL database name for Airbyte jobs and config stores.
+    database-user:
+      type: string
+      env: DATABASE_USER
+      value: airbyte
+      description: PostgreSQL user used by Airbyte.
+    database-password:
+      type: string
+      env: DATABASE_PASSWORD
+      value: ""
+      description: Sensitive PostgreSQL password. Inheriting templates must set a generated value or secret("airbyte-db-password") using a plain secret name.
+    database-url:
+      type: string
+      env: DATABASE_URL
+      value: <- `jdbc:postgresql://${database-host}:${database-port}/${database-name}`
+      description: JDBC URL for the Airbyte jobs database.
+    config-database-user:
+      type: string
+      env: CONFIG_DATABASE_USER
+      value: <- $database-user
+      description: PostgreSQL user for Airbyte config database; defaults to the jobs database user.
+    config-database-password:
+      type: string
+      env: CONFIG_DATABASE_PASSWORD
+      value: <- $database-password
+      description: Sensitive PostgreSQL password for Airbyte config database; defaults to the jobs database password.
+    config-database-url:
+      type: string
+      env: CONFIG_DATABASE_URL
+      value: <- $database-url
+      description: JDBC URL for the Airbyte config database.
+    log-level:
+      type: string
+      env: LOG_LEVEL
+      value: INFO
+      description: Airbyte service log level.
+    run-database-migration:
+      type: string
+      env: RUN_DATABASE_MIGRATION_ON_STARTUP
+      value: "true"
+      description: Allows Airbyte services and bootloader to run database migrations.
+    config-root:
+      type: string
+      env: CONFIG_ROOT
+      value: /data
+      description: Airbyte configuration root path inside containers.
+    configs-minimum-flyway-version:
+      type: string
+      env: CONFIGS_DATABASE_MINIMUM_FLYWAY_MIGRATION_VERSION
+      value: 0.35.15.001
+      description: Minimum config database Flyway migration version expected by Airbyte.
+    jobs-minimum-flyway-version:
+      type: string
+      env: JOBS_DATABASE_MINIMUM_FLYWAY_MIGRATION_VERSION
+      value: 0.29.15.001
+      description: Minimum jobs database Flyway migration version expected by Airbyte.
+    deployment-mode:
+      type: string
+      env: DEPLOYMENT_MODE
+      value: production
+      description: Airbyte deployment mode.
+    tracking-strategy:
+      type: string
+      env: TRACKING_STRATEGY
+      value: logging
+      description: Airbyte tracking strategy; logging avoids external analytics dependencies.
+    webapp-url:
+      type: string
+      env: WEBAPP_URL
+      value: http://localhost:8000/
+      description: Public URL Airbyte uses in notifications and links; inheriting exposed templates should override it.
+    workspace-root:
+      type: string
+      env: WORKSPACE_ROOT
+      value: /tmp/workspace
+      description: Workspace path used by Airbyte jobs inside containers.
+    job-error-reporting-sentry-dsn:
+      type: string
+      env: JOB_ERROR_REPORTING_SENTRY_DSN
+      value: ""
+      description: Optional Sentry DSN for job error reporting; empty disables external reporting.
+    micronaut-environments:
+      type: string
+      env: MICRONAUT_ENVIRONMENTS
+      value: control-plane
+      description: Micronaut environment profile used by Airbyte control-plane services.
+    temporal-host:
+      type: string
+      env: TEMPORAL_HOST
+      value: ""
+      description: Temporal host and port. Inheriting templates should set this from the temporal connection.
+    internal-api-host:
+      type: string
+      env: INTERNAL_API_HOST
+      value: ""
+      description: Airbyte internal API host and port. Inheriting templates should set this from the server API connection.
+    local-root:
+      type: string
+      env: LOCAL_ROOT
+      value: /tmp/airbyte_local
+      description: Local root path Airbyte uses for local file staging.
+    local-root-parent:
+      type: string
+      env: HACK_LOCAL_ROOT_PARENT
+      value: /tmp
+      description: Parent directory passed to Airbyte init when creating local mount directories.
+    workspace-docker-mount:
+      type: string
+      env: WORKSPACE_DOCKER_MOUNT
+      value: /tmp/workspace
+      description: Workspace mount path exposed to job containers.
+    auto-disable-failing-connections:
+      type: string
+      env: AUTO_DISABLE_FAILING_CONNECTIONS
+      value: "false"
+      description: Whether Airbyte automatically disables connections after repeated failures.
+    storage-type:
+      type: string
+      env: STORAGE_TYPE
+      value: S3
+      description: Blob storage type for Airbyte state and logging when supported by the selected Airbyte version.
+    storage-endpoint:
+      type: string
+      env: S3_ENDPOINT
+      value: ""
+      description: S3-compatible object storage endpoint. Inheriting templates should set this from connection details.
+    storage-region:
+      type: string
+      env: S3_REGION
+      value: us-east-1
+      description: S3 region value used for S3-compatible object storage.
+    storage-bucket:
+      type: string
+      env: S3_BUCKET
+      value: airbyte
+      description: Object storage bucket name for Airbyte state and logs.
+    storage-access-key-id:
+      type: string
+      env: S3_ACCESS_KEY_ID
+      value: ""
+      description: Sensitive object storage access key. Inheriting templates must set a generated value or secret("airbyte-s3-access-key") using a plain secret name.
+    storage-secret-access-key:
+      type: string
+      env: S3_SECRET_ACCESS_KEY
+      value: ""
+      description: Sensitive object storage secret key. Inheriting templates must set a generated value or secret("airbyte-s3-secret-key") using a plain secret name.
+    storage-path-style-access:
+      type: string
+      env: S3_PATH_STYLE_ACCESS
+      value: "true"
+      description: Enables path-style addressing for S3-compatible stores such as MinIO.
+
+init:
+  defines: runnable
+  inherits: ./common
+  metadata:
+    name: Airbyte Init
+    description: Creates local Airbyte workspace directories before long-running services start.
+    tags: airbyte, init, component
+    website: https://airbyte.com/
+    source: https://github.com/airbytehq/airbyte
+    publisher: monk.io
+    icon: https://assets-global.website-files.com/6064b31ff49a2d31e0493af1/62fe7dbb7344b272e290f1c7_airbytelogo.png
+    private: false
+  containers:
+    init:
+      image: airbyte/init
+      image-tag: <- $airbyte-image-tag
+      bash: /bin/sh -c "./scripts/create_mount_directories.sh /local_parent ${HACK_LOCAL_ROOT_PARENT} ${LOCAL_ROOT}"
+      paths:
+        - <- `${volume-local}/tmp:/local_parent`
+
+bootloader:
+  defines: runnable
+  inherits: ./common
+  metadata:
+    name: Airbyte Bootloader
+    description: Runs Airbyte database bootstrap and migration logic against the connected PostgreSQL service.
+    tags: airbyte, bootloader, migrations, component
+    website: https://airbyte.com/
+    source: https://github.com/airbytehq/airbyte
+    publisher: monk.io
+    icon: https://assets-global.website-files.com/6064b31ff49a2d31e0493af1/62fe7dbb7344b272e290f1c7_airbytelogo.png
+    private: false
+  containers:
+    bootloader:
+      image: airbyte/bootloader
+      image-tag: <- $airbyte-image-tag
+
+temporal:
+  defines: runnable
+  inherits: ./common
+  metadata:
+    name: Airbyte Temporal
+    description: Temporal workflow service used by Airbyte workers and schedulers.
+    tags: airbyte, temporal, workflow, component
+    website: https://airbyte.com/
+    source: https://github.com/airbytehq/airbyte
+    publisher: monk.io
+    icon: https://assets-global.website-files.com/6064b31ff49a2d31e0493af1/62fe7dbb7344b272e290f1c7_airbytelogo.png
+    private: false
+  containers:
+    temporal:
+      image: airbyte/temporal
+      image-tag: <- $airbyte-image-tag
+      bash: /etc/temporal/start_temporal.sh
+      environment:
+        - DB=postgresql
+        - <- `DB_PORT=${database-port}`
+        - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development.yaml
+        - <- `POSTGRES_PWD=${database-password}`
+        - <- `POSTGRES_SEEDS=${database-host}`
+        - <- `POSTGRES_USER=${database-user}`
+  files:
+    temporal-config:
+      container: temporal
+      mode: 0755
+      path: config/dynamicconfig/development.yaml
+      contents: |
+        frontend.enableClientVersionCheck:
+          - value: true
+            constraints: {}
+        history.persistenceMaxQPS:
+          - value: 3000
+            constraints: {}
+        frontend.persistenceMaxQPS:
+          - value: 3000
+            constraints: {}
+        frontend.historyMgrNumConns:
+          - value: 30
+            constraints: {}
+        frontend.throttledLogRPS:
+          - value: 20
+            constraints: {}
+        history.historyMgrNumConns:
+          - value: 50
+            constraints: {}
+        system.advancedVisibilityWritingMode:
+          - value: "off"
+            constraints: {}
+        history.defaultActivityRetryPolicy:
+          - value:
+              InitialIntervalInSeconds: 1
+              MaximumIntervalCoefficient: 100.0
+              BackoffCoefficient: 2.0
+              MaximumAttempts: 0
+        history.defaultWorkflowRetryPolicy:
+          - value:
+              InitialIntervalInSeconds: 1
+              MaximumIntervalCoefficient: 100.0
+              BackoffCoefficient: 2.0
+              MaximumAttempts: 0
+        limit.blobSize.error:
+          - value: 15728640
+            constraints: {}
+        limit.blobSize.warn:
+          - value: 10485760
+            constraints: {}
+    temporal-start:
+      container: temporal
+      mode: 0755
+      path: /etc/temporal/start_temporal.sh
+      contents: |
+        #!/usr/bin/env bash
+        export BIND_ON_IP=0.0.0.0
+        ./update-and-start-temporal.sh
+  services:
+    temporal:
+      container: temporal
+      port: 7233
+      protocol: tcp
+      publish: false
+      description: Private Temporal frontend service used by Airbyte components.
+
+worker:
+  defines: runnable
+  inherits: ./common
+  metadata:
+    name: Airbyte Worker
+    description: Executes Airbyte sync, check, discover, and spec jobs through Temporal.
+    tags: airbyte, worker, jobs, component
+    website: https://airbyte.com/
+    source: https://github.com/airbytehq/airbyte
+    publisher: monk.io
+    icon: https://assets-global.website-files.com/6064b31ff49a2d31e0493af1/62fe7dbb7344b272e290f1c7_airbytelogo.png
+    private: false
+  containers:
+    worker:
+      image: airbyte/worker
+      image-tag: <- $airbyte-image-tag
+      paths:
+        - <- `${volume-local}/tmp/workspace:${workspace-docker-mount}`
+        - <- `${volume-local}${local-root}:${local-root}`
+      environment:
+        - SYNC_JOB_MAX_ATTEMPTS=3
+        - SYNC_JOB_MAX_TIMEOUT_DAYS=3
+        - JOB_MAIN_CONTAINER_CPU_REQUEST=
+        - JOB_MAIN_CONTAINER_CPU_LIMIT=
+        - JOB_MAIN_CONTAINER_MEMORY_REQUEST=
+        - JOB_MAIN_CONTAINER_MEMORY_LIMIT=
+        - ACTIVITY_MAX_ATTEMPT=
+        - ACTIVITY_INITIAL_DELAY_BETWEEN_ATTEMPTS_SECONDS=
+        - ACTIVITY_MAX_DELAY_BETWEEN_ATTEMPTS_SECONDS=
+        - WORKFLOW_FAILURE_RESTART_DELAY_SECONDS=
+        - USE_STREAM_CAPABLE_STATE=true
+        - OTEL_COLLECTOR_ENDPOINT=http://host.docker.internal:4317
+  services:
+    jobs:
+      container: worker
+      port: 9000
+      protocol: tcp
+      publish: false
+      description: Private worker job service used by Airbyte internals.
+
+server:
+  defines: runnable
+  inherits: ./common
+  metadata:
+    name: Airbyte Server
+    description: Airbyte API server used by the webapp and internal workers.
+    tags: airbyte, api, server, component
+    website: https://airbyte.com/
+    source: https://github.com/airbytehq/airbyte
+    publisher: monk.io
+    icon: https://assets-global.website-files.com/6064b31ff49a2d31e0493af1/62fe7dbb7344b272e290f1c7_airbytelogo.png
+    private: false
+  containers:
+    server:
+      image: airbyte/server
+      image-tag: <- $airbyte-image-tag
+      paths:
+        - <- `${volume-local}/tmp/workspace:${workspace-docker-mount}`
+        - <- `${volume-local}${local-root}:${local-root}`
+  services:
+    api:
+      container: server
+      port: 8001
+      protocol: tcp
+      publish: false
+      description: Private Airbyte internal API service.
+    server:
+      container: server
+      port: 9000
+      protocol: tcp
+      publish: false
+      description: Private Airbyte server auxiliary service.
+
+cron:
+  defines: runnable
+  inherits: ./common
+  metadata:
+    name: Airbyte Cron
+    description: Runs Airbyte scheduled maintenance and background control-plane jobs.
+    tags: airbyte, cron, scheduler, component
+    website: https://airbyte.com/
+    source: https://github.com/airbytehq/airbyte
+    publisher: monk.io
+    icon: https://assets-global.website-files.com/6064b31ff49a2d31e0493af1/62fe7dbb7344b272e290f1c7_airbytelogo.png
+    private: false
+  containers:
+    cron:
+      image: airbyte/cron
+      image-tag: <- $airbyte-image-tag
+      paths:
+        - <- `${volume-local}/tmp/workspace:${workspace-docker-mount}`
+
+webapp:
+  defines: runnable
+  inherits: ./common
+  metadata:
+    name: Airbyte Webapp
+    description: Airbyte browser UI served by nginx and connected to the Airbyte API.
+    tags: airbyte, webapp, ui, component
+    website: https://airbyte.com/
+    source: https://github.com/airbytehq/airbyte
+    publisher: monk.io
+    icon: https://assets-global.website-files.com/6064b31ff49a2d31e0493af1/62fe7dbb7344b272e290f1c7_airbytelogo.png
+    private: false
+  containers:
+    webapp:
+      image: airbyte/webapp
+      image-tag: <- $airbyte-image-tag
+      environment:
+        - API_URL=/api/v1/
+        - SYNC_JOB_MAX_TIMEOUT_DAYS=3
+  services:
+    http:
+      container: webapp
+      port: 80
+      protocol: tcp
+      publish: false
+      description: Airbyte web UI HTTP service.
+
+base:
+  defines: process-group
+  metadata:
+    name: Airbyte Component Base
+    description: |
+      Reusable Airbyte component definition. It intentionally does not include a
+      concrete database or object store. Inheriting templates should connect
+      PostgreSQL as `db`, S3-compatible object storage as `object-storage`, the
+      Temporal service as `temporal`, and the Airbyte API as `api`.
+    tags: airbyte, elt, component, base
+    website: https://airbyte.com/
+    source: https://github.com/airbytehq/airbyte
+    publisher: monk.io
+    icon: https://assets-global.website-files.com/6064b31ff49a2d31e0493af1/62fe7dbb7344b272e290f1c7_airbytelogo.png
+    private: false
+  runnable-list:
+    - airbyte/temporal
+    - airbyte/worker
+    - airbyte/server
+    - airbyte/cron
+    - airbyte/webapp

@@ -1,0 +1,4 @@
+LOAD airbyte.yaml
+LOAD airbyte-example.yaml
+LOAD airbyte-stack.yaml
+ENTRY airbyte/stack-local
