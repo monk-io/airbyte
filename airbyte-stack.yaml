@@ -30,8 +30,12 @@ stack-db:
       description: Sensitive generated PostgreSQL password for the standalone stack. Inheriting production deployments should set secret("airbyte-db-password").
   containers:
     postgres:
-      paths:
-        - <- `${monk-volume-path}/airbyte-stack-postgres:/var/lib/postgresql/data`
+      mounted-volumes:
+        postgres-data:
+          path: /var/lib/postgresql/data
+  volumes:
+    postgres-data:
+      kind: local
   checks:
     readiness:
       code: tcp-check-service("airbyte/stack-db", "postgres")
@@ -64,8 +68,12 @@ stack-minio:
       description: Sensitive generated MinIO root secret key for the standalone stack. Inheriting production deployments should set secret("airbyte-s3-secret-key").
   containers:
     minio:
-      paths:
-        - <- `${monk-volume-path}/airbyte-stack-minio:/data`
+      mounted-volumes:
+        minio-data:
+          path: /data
+  volumes:
+    minio-data:
+      kind: local
   checks:
     readiness:
       code: tcp-check-service("airbyte/stack-minio", "api")
@@ -85,11 +93,6 @@ stack-init:
     publisher: monk.io
     icon: https://assets-global.website-files.com/6064b31ff49a2d31e0493af1/62fe7dbb7344b272e290f1c7_airbytelogo.png
     private: false
-  variables:
-    volume-local:
-      type: string
-      value: <- `${monk-volume-path}/airbyte-stack`
-      description: Monk volume subdirectory used by the standalone stack.
 
 stack-temporal:
   defines: runnable
@@ -186,10 +189,6 @@ stack-server:
     icon: https://assets-global.website-files.com/6064b31ff49a2d31e0493af1/62fe7dbb7344b272e290f1c7_airbytelogo.png
     private: false
   variables:
-    volume-local:
-      type: string
-      value: <- `${monk-volume-path}/airbyte-stack`
-      description: Monk volume subdirectory used by the standalone stack.
     database-name:
       type: string
       value: <- $stack-db-name
@@ -248,10 +247,6 @@ stack-worker:
     icon: https://assets-global.website-files.com/6064b31ff49a2d31e0493af1/62fe7dbb7344b272e290f1c7_airbytelogo.png
     private: false
   variables:
-    volume-local:
-      type: string
-      value: <- `${monk-volume-path}/airbyte-stack`
-      description: Monk volume subdirectory used by the standalone stack.
     database-name:
       type: string
       value: <- $stack-db-name
@@ -312,10 +307,6 @@ stack-cron:
     icon: https://assets-global.website-files.com/6064b31ff49a2d31e0493af1/62fe7dbb7344b272e290f1c7_airbytelogo.png
     private: false
   variables:
-    volume-local:
-      type: string
-      value: <- `${monk-volume-path}/airbyte-stack`
-      description: Monk volume subdirectory used by the standalone stack.
     database-name:
       type: string
       value: <- $stack-db-name

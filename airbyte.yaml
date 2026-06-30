@@ -20,10 +20,6 @@ common:
       type: string
       value: 0.40.18
       description: Public Airbyte Docker image tag used by the direct-container runtime.
-    volume-local:
-      type: string
-      value: <- `${monk-volume-path}/airbyte`
-      description: Monk volume subdirectory used for Airbyte local workspace and config data.
     airbyte-version:
       type: string
       env: AIRBYTE_VERSION
@@ -209,8 +205,12 @@ init:
       image: airbyte/init
       image-tag: <- $airbyte-image-tag
       bash: /bin/sh -c "./scripts/create_mount_directories.sh /local_parent ${HACK_LOCAL_ROOT_PARENT} ${LOCAL_ROOT}"
-      paths:
-        - <- `${volume-local}/tmp:/local_parent`
+      mounted-volumes:
+        local-parent:
+          path: /local_parent
+  volumes:
+    local-parent:
+      kind: local
 
 bootloader:
   defines: runnable
@@ -330,9 +330,11 @@ worker:
     worker:
       image: airbyte/worker
       image-tag: <- $airbyte-image-tag
-      paths:
-        - <- `${volume-local}/tmp/workspace:${workspace-docker-mount}`
-        - <- `${volume-local}${local-root}:${local-root}`
+      mounted-volumes:
+        workspace:
+          path: <- $workspace-docker-mount
+        local-staging:
+          path: <- $local-root
       environment:
         - SYNC_JOB_MAX_ATTEMPTS=3
         - SYNC_JOB_MAX_TIMEOUT_DAYS=3
@@ -346,6 +348,11 @@ worker:
         - WORKFLOW_FAILURE_RESTART_DELAY_SECONDS=
         - USE_STREAM_CAPABLE_STATE=true
         - OTEL_COLLECTOR_ENDPOINT=http://host.docker.internal:4317
+  volumes:
+    workspace:
+      kind: local
+    local-staging:
+      kind: local
   services:
     jobs:
       container: worker
@@ -370,9 +377,16 @@ server:
     server:
       image: airbyte/server
       image-tag: <- $airbyte-image-tag
-      paths:
-        - <- `${volume-local}/tmp/workspace:${workspace-docker-mount}`
-        - <- `${volume-local}${local-root}:${local-root}`
+      mounted-volumes:
+        workspace:
+          path: <- $workspace-docker-mount
+        local-staging:
+          path: <- $local-root
+  volumes:
+    workspace:
+      kind: local
+    local-staging:
+      kind: local
   services:
     api:
       container: server
@@ -403,8 +417,12 @@ cron:
     cron:
       image: airbyte/cron
       image-tag: <- $airbyte-image-tag
-      paths:
-        - <- `${volume-local}/tmp/workspace:${workspace-docker-mount}`
+      mounted-volumes:
+        workspace:
+          path: <- $workspace-docker-mount
+  volumes:
+    workspace:
+      kind: local
 
 webapp:
   defines: runnable
