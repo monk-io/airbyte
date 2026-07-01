@@ -494,7 +494,6 @@ example-webapp:
       container: webapp
       port: 80
       protocol: tcp
-      publish: true
       host-port: <- $host-port
       description: Published local Airbyte web UI endpoint for external smoke testing.
   connections:
