@@ -2,7 +2,7 @@ namespace: airbyte
 
 example-db:
   defines: runnable
-  inherits: postgresql/db
+  inherits: postgresql/db-v17
   metadata:
     name: Airbyte Example PostgreSQL
     description: Private PostgreSQL database used by the Airbyte component example.
@@ -13,10 +13,6 @@ example-db:
     icon: https://www.postgresql.org/media/img/about/press/elephant.png
     private: false
   variables:
-    version:
-      type: string
-      value: "17"
-      description: Public PostgreSQL Docker image tag used by the component example.
     db_name:
       type: string
       env: POSTGRES_DB
@@ -32,10 +28,6 @@ example-db:
       env: POSTGRES_PASSWORD
       value: <- $example-db-password
       description: Sensitive generated PostgreSQL password for the component example.
-  containers:
-    postgres:
-      paths:
-        - <- `${monk-volume-path}/airbyte-example-postgres:/var/lib/postgresql/data`
   services:
     postgres:
       container: postgres
@@ -82,10 +74,6 @@ example-minio:
       env: MINIO_CONSOLE_PORT
       value: 9001
       description: MinIO console port, kept private in the component example.
-  containers:
-    minio:
-      paths:
-        - <- `${monk-volume-path}/airbyte-example-minio:/data`
   services:
     api:
       container: minio

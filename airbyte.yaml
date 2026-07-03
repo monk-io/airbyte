@@ -23,7 +23,15 @@ common:
     volume-local:
       type: string
       value: <- `${monk-volume-path}/airbyte`
-      description: Monk volume subdirectory used for Airbyte local workspace and config data.
+      description: |
+        Shared Monk volume subdirectory for the Airbyte local workspace and
+        job-staging data. This deliberately uses a fixed host-path bind rather
+        than a runnable-level `kind: local` volume because the same directory is
+        mounted by several distinct runnables (server, worker, cron, init) and
+        must be shared across them; `kind: local` volumes auto-isolate per
+        runnable and cannot express that cross-runnable sharing. The per-runnable
+        PostgreSQL and MinIO data dirs, by contrast, use managed volumes inherited
+        from postgresql/db-v17 and minio/minio-server.
     airbyte-version:
       type: string
       env: AIRBYTE_VERSION
